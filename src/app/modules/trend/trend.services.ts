@@ -1,0 +1,554 @@
+import { prisma } from "../../../lib/prisma";
+import { 
+  calculateAccuracy, 
+  calculateMaturityStage, 
+  generateSlug,
+  findAndCreateSimilarTrends  
+} from "./trend.utils";
+
+const createTrend = async (payload: any) => {
+  const { title, mentions24h, description } = payload;
+
+  const slug = generateSlug(title);
+  const maturityStage = calculateMaturityStage(mentions24h);
+  const accuracyStatus = calculateAccuracy(0, mentions24h);
+
+  // Create the trend
+  const result = await prisma.trend.create({
+    data: {
+      title,
+      slug,
+      mentions24h,
+      historicalCount: 0,
+      maturityStage,
+      accuracyStatus,
+      firstDetectedAt: new Date(),
+      description: description || null
+    }
+  });
+
+  // 🔥 NEW: Automatically find and create similar trends
+  // This runs in background, doesn't block the response
+  findAndCreateSimilarTrends(result.id).catch(err => {
+    console.error("Error finding similar trends:", err);
+  });
+
+  return result;
+};
+
+
+const getSingleTrend = async (trendId: string) => {
+  const trend = await prisma.trend.findUniqueOrThrow({
+    where: { id: trendId },
+    include: {
+      redditMentions: {
+        orderBy: { mentionedAt: 'desc' },
+        take: 10
+      },
+      historySnapshots: {
+        orderBy: { snapshotDate: 'desc' },
+        take: 30 // Last 30 days
+      },
+      // 🔥 NEW: Include similar trends in response
+      similarTrendsFrom: {
+        include: {
+          toTrend: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              mentions24h: true,
+              maturityStage: true,
+              accuracyStatus: true,
+              firstDetectedAt: true
+            }
+          }
+        },
+        orderBy: {
+          similarityScore: 'desc'
+        },
+        take: 5
+      }
+    }
+  });
+
+  // Format the response to include similarity scores
+  const formattedTrend = {
+    ...trend,
+    similarTrends: trend.similarTrendsFrom.map(st => ({
+      ...st.toTrend,
+      similarityScore: st.similarityScore,
+      similarityPercentage: `${(st.similarityScore * 100).toFixed(1)}%`
+    }))
+  };
+
+  // Remove the raw similarTrendsFrom field
+  delete (formattedTrend as any).similarTrendsFrom;
+
+  return formattedTrend;
+};
+
+
+const getAllTrends = async () => {
+  const trends = await prisma.trend.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      _count: {
+        select: {
+          redditMentions: true,
+          similarTrendsFrom: true,
+          historySnapshots: true
+        }
+      }
+    }
+  });
+
+  const total = await prisma.trend.count();
+
+  return {
+    meta: {
+      total
+    },
+    data: trends
+  };
+};
+
+
+const updateTrend = async (trendId: string, payload: any) => {
+  const existing = await prisma.trend.findUniqueOrThrow({
+    where: { id: trendId }
+  });
+
+  const mentions = payload.mentions24h ?? existing.mentions24h;
+
+  const daysSinceDetected =
+    (Date.now() - existing.firstDetectedAt.getTime()) /
+    (1000 * 60 * 60 * 24);
+
+  const maturityStage = calculateMaturityStage(mentions);
+  const accuracyStatus = calculateAccuracy(
+    Math.floor(daysSinceDetected),
+    mentions
+  );
+
+  // Update the trend
+  const updated = await prisma.trend.update({
+    where: { id: trendId },
+    data: {
+      ...payload,
+      maturityStage,
+      accuracyStatus
+    }
+  });
+
+  // 🔥 NEW: If title or description changed, recalculate similar trends
+  if (payload.title || payload.description) {
+    console.log(`📝 Title/description updated, recalculating similar trends...`);
+    
+    // Delete old relationships for this trend
+    await prisma.similarTrend.deleteMany({
+      where: {
+        OR: [
+          { fromTrendId: trendId },
+          { toTrendId: trendId }
+        ]
+      }
+    });
+
+    // Recreate relationships
+    findAndCreateSimilarTrends(trendId).catch(err => {
+      console.error("Error recalculating similar trends:", err);
+    });
+  }
+
+  return updated;
+};
+
+
+const deleteTrend = async (trendId: string) => {
+  const deletedTrend = await prisma.trend.delete({
+    where: { id: trendId }
+  });
+
+  return deletedTrend;
+};
+
+
+const getTrendsOneMonthAgo = async () => {
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+  const startDate = new Date(oneMonthAgo);
+  startDate.setHours(0, 0, 0, 0);
+  
+  const endDate = new Date(oneMonthAgo);
+  endDate.setHours(23, 59, 59, 999);
+
+  const trends = await prisma.trend.findMany({
+    where: {
+      firstDetectedAt: {
+        gte: startDate,
+        lte: endDate
+      }
+    },
+    include: {
+      redditMentions: {
+        take: 5,
+        orderBy: { mentionedAt: 'desc' }
+      },
+      historySnapshots: {
+        orderBy: { snapshotDate: 'desc' },
+        take: 1
+      },
+      _count: {
+        select: {
+          redditMentions: true,
+          similarTrendsFrom: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  // Add comparison data (then vs now)
+  const trendsWithComparison = trends.map(trend => {
+    const latestSnapshot = trend.historySnapshots[0];
+    
+    return {
+      ...trend,
+      comparison: {
+        initialMentions: trend.mentions24h,
+        currentMentions: latestSnapshot?.mentions24h || trend.mentions24h,
+        initialStage: trend.maturityStage,
+        currentStage: latestSnapshot?.maturityStage || trend.maturityStage,
+        initialAccuracy: trend.accuracyStatus,
+        currentAccuracy: latestSnapshot?.accuracyStatus || trend.accuracyStatus,
+        growth: latestSnapshot 
+          ? ((latestSnapshot.mentions24h - trend.mentions24h) / trend.mentions24h * 100).toFixed(1) + '%'
+          : '0%'
+      }
+    };
+  });
+
+  return trendsWithComparison;
+};
+
+
+const searchTrends = async (query: string) => {
+  const trends = await prisma.trend.findMany({
+    where: {
+      OR: [
+        { title: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } }
+      ]
+    },
+    take: 20,
+    orderBy: { mentions24h: 'desc' },
+    include: {
+      _count: {
+        select: {
+          redditMentions: true,
+          similarTrendsFrom: true
+        }
+      }
+    }
+  });
+
+  return trends;
+};
+
+
+const getSimilarTrends = async (trendId: string, limit: number = 5) => {
+  const similarTrends = await prisma.similarTrend.findMany({
+    where: {
+      fromTrendId: trendId
+    },
+    include: {
+      toTrend: {
+        include: {
+          redditMentions: {
+            take: 3,
+            orderBy: { mentionedAt: 'desc' }
+          },
+          _count: {
+            select: {
+              redditMentions: true,
+              similarTrendsFrom: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: {
+      similarityScore: 'desc'
+    },
+    take: limit
+  });
+
+  // Return with similarity score included
+  return similarTrends.map(st => ({
+    ...st.toTrend,
+    similarityScore: st.similarityScore,
+    similarityPercentage: `${(st.similarityScore * 100).toFixed(1)}%`
+  }));
+};
+
+
+const addRedditMentions = async (
+  trendId: string,
+  mentions: Array<{
+    subreddit: string;
+    postTitle: string;
+    postUrl: string;
+    mentionedAt: Date;
+  }>
+) => {
+  // Verify trend exists
+  await prisma.trend.findUniqueOrThrow({
+    where: { id: trendId }
+  });
+
+  const createdMentions = await prisma.redditMention.createMany({
+    data: mentions.map(m => ({
+      trendId,
+      ...m
+    }))
+  });
+
+  // Update trend's mention count
+  const newMentionCount = await prisma.redditMention.count({
+    where: { trendId }
+  });
+
+  await prisma.trend.update({
+    where: { id: trendId },
+    data: {
+      mentions24h: newMentionCount
+    }
+  });
+
+  return createdMentions;
+};
+
+
+const createHistorySnapshot = async (trendId: string) => {
+  const trend = await prisma.trend.findUnique({
+    where: { id: trendId }
+  });
+
+  if (!trend) throw new Error('Trend not found');
+
+  const snapshot = await prisma.trendHistory.create({
+    data: {
+      trendId,
+      snapshotDate: new Date(),
+      mentions24h: trend.mentions24h,
+      maturityStage: trend.maturityStage,
+      accuracyStatus: trend.accuracyStatus
+    }
+  });
+
+  return snapshot;
+};
+
+
+const addSimilarTrend = async (
+  fromTrendId: string,
+  toTrendId: string,
+  similarityScore: number = 0.7
+) => {
+  // Verify both trends exist
+  await prisma.trend.findUniqueOrThrow({
+    where: { id: fromTrendId }
+  });
+
+  await prisma.trend.findUniqueOrThrow({
+    where: { id: toTrendId }
+  });
+
+  // Create bidirectional relationship
+  const relationship1 = await prisma.similarTrend.upsert({
+    where: {
+      fromTrendId_toTrendId: {
+        fromTrendId,
+        toTrendId
+      }
+    },
+    create: {
+      fromTrendId,
+      toTrendId,
+      similarityScore
+    },
+    update: {
+      similarityScore
+    }
+  });
+
+  // Reverse relationship
+  await prisma.similarTrend.upsert({
+    where: {
+      fromTrendId_toTrendId: {
+        fromTrendId: toTrendId,
+        toTrendId: fromTrendId
+      }
+    },
+    create: {
+      fromTrendId: toTrendId,
+      toTrendId: fromTrendId,
+      similarityScore
+    },
+    update: {
+      similarityScore
+    }
+  });
+
+  return relationship1;
+};
+
+
+const getTrendsWithFilters = async (filters: {
+  maturityStage?: string;
+  accuracyStatus?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  const where: any = {};
+
+  if (filters.maturityStage) {
+    where.maturityStage = filters.maturityStage;
+  }
+
+  if (filters.accuracyStatus) {
+    where.accuracyStatus = filters.accuracyStatus;
+  }
+
+  const trends = await prisma.trend.findMany({
+    where,
+    include: {
+      redditMentions: {
+        take: 5,
+        orderBy: { mentionedAt: 'desc' }
+      },
+      _count: {
+        select: {
+          redditMentions: true,
+          similarTrendsFrom: true,
+          historySnapshots: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: filters.limit || 20,
+    skip: filters.offset || 0
+  });
+
+  const total = await prisma.trend.count({ where });
+
+  return {
+    meta: {
+      total,
+      limit: filters.limit || 20,
+      offset: filters.offset || 0
+    },
+    data: trends
+  };
+};
+
+const rebuildAllSimilarTrends = async () => {
+  console.log("🔄 Rebuilding all similar trend relationships...");
+
+  // Delete all existing relationships
+  await prisma.similarTrend.deleteMany({});
+
+  // Get all trends
+  const allTrends = await prisma.trend.findMany();
+
+  // Rebuild relationships for each trend
+  for (const trend of allTrends) {
+    await findAndCreateSimilarTrends(trend.id);
+  }
+
+  const totalRelationships = await prisma.similarTrend.count();
+
+  console.log(`✅ Rebuilt ${totalRelationships} similar trend relationships`);
+
+  return {
+    message: "All similar trends rebuilt successfully",
+    totalTrends: allTrends.length,
+    totalRelationships
+  };
+};
+
+
+const getTrendingNow = async (limit: number = 10) => {
+  const trends = await prisma.trend.findMany({
+    where: {
+      maturityStage: {
+        in: ['DISCOVERY', 'POLAR_TREND', 'EARLY_MAINSTREAM']
+      }
+    },
+    orderBy: [
+      { mentions24h: 'desc' },
+      { createdAt: 'desc' }
+    ],
+    take: limit,
+    include: {
+      redditMentions: {
+        take: 3,
+        orderBy: { mentionedAt: 'desc' }
+      },
+      _count: {
+        select: {
+          redditMentions: true,
+          similarTrendsFrom: true
+        }
+      }
+    }
+  });
+
+  return trends;
+};
+
+
+const getStats = async () => {
+  const total = await prisma.trend.count();
+  
+  const byMaturity = await prisma.trend.groupBy({
+    by: ['maturityStage'],
+    _count: true
+  });
+
+  const byAccuracy = await prisma.trend.groupBy({
+    by: ['accuracyStatus'],
+    _count: true
+  });
+
+  const totalMentions = await prisma.redditMention.count();
+  const totalRelationships = await prisma.similarTrend.count();
+
+  return {
+    totalTrends: total,
+    totalRedditMentions: totalMentions,
+    totalSimilarRelationships: totalRelationships,
+    byMaturityStage: byMaturity,
+    byAccuracyStatus: byAccuracy
+  };
+};
+
+export const TrendService = {
+  createTrend,
+  getSingleTrend,
+  getAllTrends,
+  updateTrend,
+  deleteTrend,
+  getTrendsOneMonthAgo,
+  searchTrends,
+  getSimilarTrends,
+  addRedditMentions,
+  createHistorySnapshot,
+  addSimilarTrend,
+  getTrendsWithFilters,
+  rebuildAllSimilarTrends,  
+  getTrendingNow,           
+  getStats                  
+};

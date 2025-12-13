@@ -1,0 +1,217 @@
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+ 
+// }
+
+// /*
+//  ENUMS
+// */
+// enum TrendMaturityStage {
+//   DISCOVERY
+//   POLAR_TREND
+//   EARLY_MAINSTREAM
+//   SATURATION
+// }
+
+
+// enum Role {
+//   USER
+//   ADMIN
+// }
+
+// enum PredictionAccuracy {
+//   TOO_EARLY
+//   RISING
+//   EXPLODING
+// }
+
+// /*
+//  MAIN TREND TABLE
+// */
+// model Trend {
+//   id                String               @id @default(uuid())
+//   title             String               @unique
+//   slug              String               @unique
+//   description       String?
+  
+//   mentions24h       Int
+//   historicalCount   Int
+
+//   maturityStage     TrendMaturityStage
+//   accuracyStatus    PredictionAccuracy
+
+//   firstDetectedAt   DateTime
+//   createdAt         DateTime             @default(now())
+//   updatedAt         DateTime             @updatedAt
+
+//   // relations
+//   redditMentions    RedditMention[]
+//   historySnapshots  TrendHistory[]
+//   similarTrendsFrom SimilarTrend[]       @relation("from")
+//   similarTrendsTo   SimilarTrend[]       @relation("to")
+// }
+
+
+// model RedditMention {
+//   id          String   @id @default(uuid())
+//   trendId     String
+
+//   subreddit   String
+//   postTitle   String
+//   postUrl     String
+//   mentionedAt DateTime
+
+//   trend       Trend    @relation(fields: [trendId], references: [id], onDelete: Cascade)
+// }
+
+
+// model TrendHistory {
+//   id              String               @id @default(uuid())
+//   trendId         String
+
+//   snapshotDate    DateTime
+//   mentions24h     Int
+//   maturityStage   TrendMaturityStage
+//   accuracyStatus  PredictionAccuracy
+
+//   trend           Trend                @relation(fields: [trendId], references: [id], onDelete: Cascade)
+
+//   @@unique([trendId, snapshotDate])
+// }
+
+
+// model SimilarTrend {
+//   id          String @id @default(uuid())
+
+//   fromTrendId String
+//   toTrendId   String
+
+//   similarityScore Float
+
+//   fromTrend Trend @relation("from", fields: [fromTrendId], references: [id], onDelete: Cascade)
+//   toTrend   Trend @relation("to", fields: [toTrendId], references: [id], onDelete: Cascade)
+
+//   @@unique([fromTrendId, toTrendId])
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+
+}
+
+/*
+ ENUMS
+*/
+enum TrendMaturityStage {
+  DISCOVERY
+  POLAR_TREND
+  EARLY_MAINSTREAM
+  SATURATION
+}
+
+enum PredictionAccuracy {
+  TOO_EARLY
+  RISING
+  EXPLODING
+}
+
+
+model Trend {
+  id              String               @id @default(uuid())
+  title           String               @unique
+  slug            String               @unique
+  description     String?
+
+  mentions24h     Int
+  historicalCount Int
+
+  maturityStage   TrendMaturityStage
+  accuracyStatus  PredictionAccuracy
+
+  firstDetectedAt DateTime
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  // relations
+  redditMentions    RedditMention[]
+  historySnapshots  TrendHistory[]
+  similarTrendsFrom SimilarTrend[]     @relation("from")
+  similarTrendsTo   SimilarTrend[]     @relation("to")
+}
+
+
+model RedditCandidateMention {
+  id          String   @id @default(uuid())
+
+  candidate   String   
+  subreddit   String
+  postTitle   String
+  postUrl     String   @unique
+  mentionedAt DateTime
+
+  createdAt   DateTime @default(now())
+}
+
+
+model RedditMention {
+  id          String   @id @default(uuid())
+  trendId     String
+
+  subreddit   String
+  postTitle   String
+  postUrl     String   
+  mentionedAt DateTime
+
+  trend       Trend    @relation(fields: [trendId], references: [id], onDelete: Cascade)
+}
+
+
+model TrendHistory {
+  id             String               @id @default(uuid())
+  trendId        String
+
+  snapshotDate   DateTime
+  mentions24h    Int
+  maturityStage  TrendMaturityStage
+  accuracyStatus PredictionAccuracy
+
+  trend          Trend                @relation(fields: [trendId], references: [id], onDelete: Cascade)
+
+  @@unique([trendId, snapshotDate])
+}
+
+
+model SimilarTrend {
+  id              String @id @default(uuid())
+
+  fromTrendId     String
+  toTrendId       String
+
+  similarityScore Float
+
+  fromTrend Trend @relation("from", fields: [fromTrendId], references: [id], onDelete: Cascade)
+  toTrend   Trend @relation("to", fields: [toTrendId], references: [id], onDelete: Cascade)
+
+  @@unique([fromTrendId, toTrendId])
+}
