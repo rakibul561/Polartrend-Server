@@ -2,6 +2,7 @@
 import auth from "../../middleware/auth";
 import { UserController } from "./user.controller";
 import express from "express";
+import { UserRole } from "./userConstance";
 
     
 

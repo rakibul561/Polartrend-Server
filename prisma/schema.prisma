@@ -100,17 +100,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -120,9 +109,9 @@ datasource db {
 
 }
 
-/*
- ENUMS
-*/
+
+
+
 enum TrendMaturityStage {
   DISCOVERY
   POLAR_TREND
