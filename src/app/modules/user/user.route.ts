@@ -10,7 +10,7 @@ const router = express.Router();
 
 router.post("/register",UserController.createUser); 
 router.get("/me",UserController.getSingleUser);
-router.get("/",UserController.getAllUsers);
+router.get("/",auth(UserRole.ADMIN),UserController.getAllUsers);
 router.patch("/profile" ,UserController.UserUpdateProfile);
 
 export const UserRoutes = router;

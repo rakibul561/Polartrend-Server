@@ -6,10 +6,13 @@ import { glob } from "fs";
 import globalErrorHandler from "./app/middleware/globalErrorHandaler";
 import notFound from "./app/middleware/notFound";
 import cookieParser from 'cookie-parser';
+import { authRateLimiter } from "./app/middleware/rateLimiter";
+import morgan from "morgan";
 
 
 
 const app = express();
+app.use(morgan("dev"));
 
 
 
@@ -48,6 +51,7 @@ app.use((req, res, next) => {
   });
 });
 
+app.use(authRateLimiter)
 
 app.use(globalErrorHandler)
 app.use(notFound)
