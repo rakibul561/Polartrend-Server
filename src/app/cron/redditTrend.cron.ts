@@ -98,6 +98,8 @@ async function scanRedditAndDetectTrends() {
       }
     });
 
+    
+
     console.log(`📊 "${keyword}" → ${mentionsCount} mentions`);
 
     if (mentionsCount < TREND_THRESHOLD) continue;
@@ -119,6 +121,7 @@ async function scanRedditAndDetectTrends() {
     });
 
     console.log(`🚀 TREND CREATED → ${trendTitle}`);
+    
 
     /* -------- STEP 3: Attach proof mentions -------- */
     const proofs = await prisma.redditCandidateMention.findMany({
@@ -145,7 +148,6 @@ async function scanRedditAndDetectTrends() {
   }
 }
 
-/* ================= CRON ================= */
 
 // runs every 30 seconds (for testing)
 cron.schedule("*/30 * * * * *", async () => {

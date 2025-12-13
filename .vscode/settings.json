@@ -1,0 +1,30 @@
+{
+  "better-comments.tags": [
+  {
+    "tag": "!",
+    "color": "#FF2D00",
+    "bold": true
+  },
+  {
+    "tag": "?",
+    "color": "#3498DB",
+    "bold": true
+  },
+  {
+    "tag": "TODO",
+    "color": "#FF8C00",
+    "bold": true
+  },
+  {
+    "tag": "*",
+    "color": "#2ECC71",
+    "bold": true
+  },
+  {
+    "tag": "FIX",
+    "color": "#E74C3C",
+    "bold": true
+  }
+  ],
+  "better-comments.multilineComments": true
+}

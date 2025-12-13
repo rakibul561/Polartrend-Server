@@ -1,5 +1,7 @@
 import express from "express";
 import { TrendController } from "./trend.controller";
+import auth from "../../middleware/auth";
+import { UserRole } from "../user/userConstance";
 
 
 const router = express.Router();
@@ -25,9 +27,9 @@ router.post("/rebuild-similar", TrendController.rebuildAllSimilarTrends);
 
 router.post("/", TrendController.createTrend); 
 
-router.put("/:id", TrendController.updateTrend); 
+router.put("/:id", auth(UserRole.ADMIN),TrendController.updateTrend); 
 
-router.delete("/:id", TrendController.deleteTrend); 
+router.delete("/:id",auth(UserRole.ADMIN) ,TrendController.deleteTrend); 
 
 router.post("/:id/mentions", TrendController.addRedditMentions);
 

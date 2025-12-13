@@ -2,19 +2,14 @@ import compression from "compression";
 import cors from "cors";
 import express from "express";
 import router from "./app/routes";
-import { glob } from "fs";
 import globalErrorHandler from "./app/middleware/globalErrorHandaler";
 import notFound from "./app/middleware/notFound";
 import cookieParser from 'cookie-parser';
 import { authRateLimiter } from "./app/middleware/rateLimiter";
 import morgan from "morgan";
 
-
-
 const app = express();
 app.use(morgan("dev"));
-
-
 app.use(cors()); 
 app.use(compression()); 
 app.use(express.json()); 
@@ -27,10 +22,7 @@ app.use(
   })
 );
 
-
-
 app.use("/api/v1", router)
-
 
 app.get("/", (_req, res) => {
   res.json({
