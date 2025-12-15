@@ -1,0 +1,24 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TrendRoutes = void 0;
+const express_1 = __importDefault(require("express"));
+const trend_controller_1 = require("./trend.controller");
+const auth_1 = __importDefault(require("../../middleware/auth"));
+const userConstance_1 = require("../user/userConstance");
+const router = express_1.default.Router();
+router.get("/stats", trend_controller_1.TrendController.getStats);
+router.get("/trending", trend_controller_1.TrendController.getTrendingNow);
+router.get("/search", trend_controller_1.TrendController.searchTrends);
+router.get("/fast-forward/month", trend_controller_1.TrendController.getTrendsOneMonthAgo);
+router.get("/", trend_controller_1.TrendController.getTrendsWithFilters);
+router.get("/:id", trend_controller_1.TrendController.getSingleTrend);
+router.get("/:id/similar", trend_controller_1.TrendController.getSimilarTrends);
+router.post("/rebuild-similar", trend_controller_1.TrendController.rebuildAllSimilarTrends);
+router.post("/", trend_controller_1.TrendController.createTrend);
+router.put("/:id", (0, auth_1.default)(userConstance_1.UserRole.ADMIN), trend_controller_1.TrendController.updateTrend);
+router.delete("/:id", (0, auth_1.default)(userConstance_1.UserRole.ADMIN), trend_controller_1.TrendController.deleteTrend);
+router.post("/:id/mentions", trend_controller_1.TrendController.addRedditMentions);
+exports.TrendRoutes = router;
