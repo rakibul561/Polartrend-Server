@@ -614,13 +614,13 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 👥 Team
 
-- **Backend Development:** Your Name
-- **Database Architecture:** Your Name
-- **API Design:** Your Name
+- **Backend Development:** Rakibul Hasan
+- **Database Architecture:** Rakibul Hasan
+- **API Design:** Rakibul Hasan
 
 ## 📞 Support
 
-For support, email support@polartrend.com or join our Discord server.
+For support, email rakibulhasan3929@gmail.com or join our Discord server.
 
 ## 🔗 Related Links
 
@@ -629,7 +629,6 @@ For support, email support@polartrend.com or join our Discord server.
 - API Documentation: [Link to Swagger/Postman docs]
 
 ## 📈 Roadmap
-
 - [x] Core API development
 - [x] Database schema design
 - [x] JWT authentication
@@ -648,7 +647,6 @@ For support, email support@polartrend.com or join our Discord server.
 - [ ] API documentation (Swagger)
 
 ## 🙏 Acknowledgments
-
 - Reddit API for trend data
 - Prisma ORM for excellent database tooling
 - Express.js community
